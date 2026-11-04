@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
 import Dashboard from './Dashboard';
 
-const API = 'http://localhost:5000/api/projects';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/projects';
 
 const architecturalImage =
   'data:image/svg+xml;charset=UTF-8,' +
