@@ -8,19 +8,12 @@ const { MongoClient, ObjectId } = require('mongodb');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-if (!process.env.MONGO_URI) {
-    console.error('MONGO_URI is missing from environment variables');
-    process.exit(1);
-}
-
-const client = new MongoClient(process.env.MONGO_URI);
-
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-let projects;
+let client;
+let projects = null;
 
-// Helper: clean optional project fields
 function getOptionalFields(body) {
     const fields = {};
 
@@ -35,26 +28,35 @@ function getOptionalFields(body) {
     return fields;
 }
 
+function requireDatabase(req, res, next) {
+    if (!projects) {
+        return res.status(503).json({
+            error: 'Database is not connected. MongoDB Atlas setup is required.'
+        });
+    }
+    next();
+}
+
 // Health check
 app.get('/', (req, res) => {
     res.json({
-        message: 'Elite Architectural Firm API is running'
+        message: 'Elite Architectural Firm API is running',
+        database: projects ? 'connected' : 'not connected'
     });
 });
 
-// READ: Get all projects
-app.get('/api/projects', async (req, res) => {
+// READ
+app.get('/api/projects', requireDatabase, async (req, res) => {
     try {
-        const records = await projects.find({}).toArray();
-        res.json(records);
+        res.json(await projects.find({}).toArray());
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Unable to fetch projects' });
     }
 });
 
-// CREATE: Add project
-app.post('/api/projects', async (req, res) => {
+// CREATE
+app.post('/api/projects', requireDatabase, async (req, res) => {
     try {
         const { name, category } = req.body;
 
@@ -84,8 +86,8 @@ app.post('/api/projects', async (req, res) => {
     }
 });
 
-// UPDATE: Edit project
-app.put('/api/projects/:id', async (req, res) => {
+// UPDATE
+app.put('/api/projects/:id', requireDatabase, async (req, res) => {
     try {
         const { id } = req.params;
         const { name, category } = req.body;
@@ -123,8 +125,8 @@ app.put('/api/projects/:id', async (req, res) => {
     }
 });
 
-// DELETE: Remove project
-app.delete('/api/projects/:id', async (req, res) => {
+// DELETE
+app.delete('/api/projects/:id', requireDatabase, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -147,8 +149,8 @@ app.delete('/api/projects/:id', async (req, res) => {
     }
 });
 
-// SEARCH: Find projects by category
-app.get('/api/projects/search/:category', async (req, res) => {
+// SEARCH
+app.get('/api/projects/search/:category', requireDatabase, async (req, res) => {
     try {
         const category = req.params.category;
 
@@ -163,23 +165,28 @@ app.get('/api/projects/search/:category', async (req, res) => {
     }
 });
 
-// Connect to MongoDB and start server
+// Start server even if MongoDB is unavailable
 async function startServer() {
-    try {
-        await client.connect();
+    if (process.env.MONGO_URI) {
+        try {
+            client = new MongoClient(process.env.MONGO_URI);
+            await client.connect();
 
-        const db = client.db('EliteArchitectureDB');
-        projects = db.collection('Projects');
+            const db = client.db('EliteArchitectureDB');
+            projects = db.collection('Projects');
 
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Elite Architectural Firm backend running on port ${PORT}`);
             console.log('MongoDB connected successfully');
-        });
-
-    } catch (error) {
-        console.error('Database connection failed:', error.message);
-        process.exit(1);
+        } catch (error) {
+            console.error('MongoDB connection failed:', error.message);
+            console.log('Starting API without database access.');
+        }
+    } else {
+        console.log('MONGO_URI not configured. Starting without database.');
     }
+
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Elite Architectural Firm backend running on port ${PORT}`);
+    });
 }
 
 startServer();
