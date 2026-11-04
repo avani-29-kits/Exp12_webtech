@@ -6,6 +6,13 @@ const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
+if (!process.env.MONGO_URI) {
+    console.error('MONGO_URI is missing from environment variables');
+    process.exit(1);
+}
+
 const client = new MongoClient(process.env.MONGO_URI);
 
 app.use(cors());
@@ -27,6 +34,13 @@ function getOptionalFields(body) {
 
     return fields;
 }
+
+// Health check
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Elite Architectural Firm API is running'
+    });
+});
 
 // READ: Get all projects
 app.get('/api/projects', async (req, res) => {
@@ -149,6 +163,7 @@ app.get('/api/projects/search/:category', async (req, res) => {
     }
 });
 
+// Connect to MongoDB and start server
 async function startServer() {
     try {
         await client.connect();
@@ -156,10 +171,11 @@ async function startServer() {
         const db = client.db('EliteArchitectureDB');
         projects = db.collection('Projects');
 
-        app.listen(process.env.PORT || 5000, () => {
-            console.log('Elite Architectural Firm backend running on port 5000');
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Elite Architectural Firm backend running on port ${PORT}`);
             console.log('MongoDB connected successfully');
         });
+
     } catch (error) {
         console.error('Database connection failed:', error.message);
         process.exit(1);
